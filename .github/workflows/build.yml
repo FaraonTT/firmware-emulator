@@ -7,6 +7,9 @@ on:
     branches: [ main ]
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -24,10 +27,13 @@ jobs:
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
 
-      - name: Build debug APK
+      - name: Generate Gradle Wrapper
         run: |
-          chmod +x gradlew || true
-          ./gradlew assembleDebug --stacktrace
+          gradle wrapper --gradle-version 8.7
+          chmod +x gradlew
+
+      - name: Build debug APK
+        run: ./gradlew assembleDebug --stacktrace
 
       - name: Rename APK to fEmulator
         run: |
@@ -35,9 +41,25 @@ jobs:
           find app/build/outputs/apk -name "*.apk" -exec cp {} artifacts/fEmulator.apk \;
           ls -la artifacts/
 
-      - name: Upload fEmulator.apk
+      - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: fEmulator
           path: artifacts/fEmulator.apk
           retention-days: 14
+
+      - name: Create Release
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ github.run_number }}
+          name: fEmulator v${{ github.run_number }}
+          body: |
+            Автосборка fEmulator
+            - Commit: ${{ github.sha }}
+            - Branch: ${{ github.ref_name }}
+          files: artifacts/fEmulator.apk
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
